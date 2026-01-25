@@ -1,0 +1,36 @@
+{
+  "name": "llmview",
+  "version": "0.1.0",
+  "bin": {
+    "llmview": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node --test --experimental-strip-types test/**/*.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Generate LLM context from codebases using gitignore-style patterns",
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "minimatch": "^10.0.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noahtren/llmview.git"
+  },
+  "bugs": {
+    "url": "https://github.com/noahtren/llmview/issues"
+  }
+}

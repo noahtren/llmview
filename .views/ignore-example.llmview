@@ -1,0 +1,5 @@
+# llmview -v .views/ignore-example.llmview | pbcopy
+
+examples/**
+!examples/ignored.txt
+.views/**
