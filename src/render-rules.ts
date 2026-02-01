@@ -1,52 +1,30 @@
 import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
+import * as readline from 'readline';
 import { FileNode, Renderer, RenderFilesOptions } from './types';
-import { MAX_FILE_SIZE_KB } from './constants';
+import { CSV_PREVIEW_LINES, MAX_FILE_SIZE_KB } from './constants';
 
-const readFirstNLines = (
+const readFirstNLines = async (
   filePath: string,
   n: number
-): { lines: string[]; hasMore: boolean } => {
-  const fd = fs.openSync(filePath, 'r');
-  const bufferSize = 64 * 1024;
-  const buffer = Buffer.alloc(bufferSize);
-
+): Promise<{ lines: string[]; hasMore: boolean }> => {
   const lines: string[] = [];
-  let leftover = '';
-  let hasMore = false;
+  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   try {
-    while (lines.length < n) {
-      const bytesRead = fs.readSync(fd, buffer, 0, bufferSize, null);
-      if (bytesRead === 0) break; // EOF
-
-      const chunk = leftover + buffer.toString('utf-8', 0, bytesRead);
-      const chunkLines = chunk.split('\n');
-      leftover = chunkLines.pop() || '';
-
-      for (const line of chunkLines) {
-        if (lines.length < n) {
-          lines.push(line);
-        } else {
-          hasMore = true;
-          break;
-        }
-      }
-
-      if (hasMore) break;
-    }
-
-    if (!hasMore && lines.length >= n) {
-      if (leftover !== '') {
-        hasMore = true;
+    for await (const line of rl) {
+      if (lines.length < n) {
+        lines.push(line);
       } else {
-        hasMore = fs.readSync(fd, buffer, 0, 1, null) > 0;
+        return { lines, hasMore: true };
       }
     }
-
-    return { lines, hasMore };
+    return { lines, hasMore: false };
   } finally {
-    fs.closeSync(fd);
+    rl.close();
+    stream.destroy();
   }
 };
 
@@ -59,21 +37,20 @@ const numberLines = (lines: string[]): string => {
     .join('\n');
 };
 
-export const defaultRenderer = (
+export const defaultRenderer: Renderer = async (
   rootPath: string,
   file: FileNode,
   options: RenderFilesOptions
-): string => {
+): Promise<string> => {
   const fullPath = path.join(rootPath, file.relativePath);
 
-  const stats = fs.statSync(fullPath);
-  if (stats.size > MAX_FILE_SIZE_KB * 1024) {
-    return `(File contents excluded: size ${(stats.size / 1024).toFixed(
+  if (file.size > MAX_FILE_SIZE_KB * 1024) {
+    return `(File contents excluded: size ${(file.size / 1024).toFixed(
       2
     )}KB exceeds ${MAX_FILE_SIZE_KB}KB limit)`;
   }
 
-  const content = fs.readFileSync(fullPath, 'utf-8');
+  const content = await fsPromises.readFile(fullPath, 'utf-8');
 
   if (options.lineNumbers) {
     const lines = content.split('\n');
@@ -89,9 +66,12 @@ export const RENDER_RULES: Array<{
   // csv
   {
     matcher: (name) => ['.csv'].some((ext) => name.toLowerCase().endsWith(ext)),
-    renderer: (rootPath, file, options) => {
+    renderer: async (rootPath, file, options) => {
       const fullPath = path.join(rootPath, file.relativePath);
-      const { lines, hasMore } = readFirstNLines(fullPath, 10);
+      const { lines, hasMore } = await readFirstNLines(
+        fullPath,
+        CSV_PREVIEW_LINES
+      );
       const preview = options.lineNumbers
         ? numberLines(lines)
         : lines.join('\n');
@@ -102,7 +82,7 @@ export const RENDER_RULES: Array<{
   {
     matcher: (name) =>
       ['.xls', '.xlsx'].some((ext) => name.toLowerCase().endsWith(ext)),
-    renderer: (rootPath, file, options) => '(Contents excluded)',
+    renderer: async () => '(Contents excluded)',
   },
   // media
   {
@@ -110,12 +90,12 @@ export const RENDER_RULES: Array<{
       ['.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4'].some((ext) =>
         name.toLowerCase().endsWith(ext)
       ),
-    renderer: (rootPath, file, options) => '(Contents excluded)',
+    renderer: async () => '(Contents excluded)',
   },
   // misc
   {
     matcher: (name) =>
       ['.pdf', '.zip'].some((ext) => name.toLowerCase().endsWith(ext)),
-    renderer: (rootPath, file, options) => '(Contents excluded)',
+    renderer: async () => '(Contents excluded)',
   },
 ];

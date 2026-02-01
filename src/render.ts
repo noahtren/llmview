@@ -1,25 +1,30 @@
-import { FileNode, FileSystemNode, Renderer, RenderFilesOptions } from './types';
-import { defaultRenderer, RENDER_RULES } from './renderers';
+import {
+  FileNode,
+  FileSystemNode,
+  Renderer,
+  RenderFilesOptions,
+} from './types';
+import { defaultRenderer, RENDER_RULES } from './render-rules';
 
 type RenderHierarchyOptions = {
   indentChar?: string;
   verbose?: boolean;
 };
 
-export const renderHierarchy = (
+export const renderDirectory = (
+  rootNode: FileSystemNode,
+  options: RenderHierarchyOptions,
+  visiblePaths?: Set<string>
+): string => {
+  return renderDirectoryNode(rootNode, options, visiblePaths, 0);
+};
+
+const renderDirectoryNode = (
   node: FileSystemNode,
   options: RenderHierarchyOptions,
-  visiblePaths?: Set<string>,
-  currentDepth: number = 0
-): string | null => {
-  if (
-    visiblePaths &&
-    node.relativePath &&
-    !visiblePaths.has(node.relativePath)
-  ) {
-    return null;
-  }
-
+  visiblePaths: Set<string> | undefined,
+  currentDepth: number
+): string => {
   const { indentChar = '    ' } = options;
   const indent = indentChar.repeat(currentDepth);
 
@@ -27,47 +32,45 @@ export const renderHierarchy = (
     return `${indent}${node.name}`;
   }
 
-  let result = `${indent}${node.name}/`;
-
-  if (node.children.length === 0) {
-    return result;
-  }
   const childrenOutput = node.children
-    .map((child) =>
-      renderHierarchy(child, options, visiblePaths, currentDepth + 1)
+    .filter(
+      (child) =>
+        !visiblePaths ||
+        !child.relativePath ||
+        visiblePaths.has(child.relativePath)
     )
-    .filter((output) => output !== null)
+    .map((child) =>
+      renderDirectoryNode(child, options, visiblePaths, currentDepth + 1)
+    )
     .join('\n');
 
+  const result = `${indent}${node.name}/`;
+
   if (currentDepth === 0) {
-    return `\`\`\`
-<directory>
-${result}
-${childrenOutput}
-</directory>
-\`\`\`\n\n`;
-  } else {
-    return `${result}\n${childrenOutput}`;
+    return `\`\`\`\n<directory>\n${result}\n${childrenOutput}\n</directory>\n\`\`\`\n\n`;
   }
+
+  return childrenOutput ? `${result}\n${childrenOutput}` : result;
 };
 
-export const renderFiles = (
+export const renderFiles = async (
   rootPath: string,
   files: FileNode[],
   options: RenderFilesOptions
-): string => {
-  return files
-    .map((file) => renderFileBlock(rootPath, file, options))
-    .join('\n\n');
+): Promise<string> => {
+  const renderedBlocks = await Promise.all(
+    files.map((file) => renderFile(rootPath, file, options))
+  );
+  return renderedBlocks.join('\n\n');
 };
 
-const renderFileBlock = (
+const renderFile = async (
   rootPath: string,
   file: FileNode,
   options: RenderFilesOptions
-): string => {
+): Promise<string> => {
   const renderer = getRenderer(file);
-  const rendered = renderer(rootPath, file, options);
+  const rendered = await renderer(rootPath, file, options);
 
   if (options.verbose) {
     console.warn({ path: file.relativePath, length: rendered.length });
@@ -80,9 +83,7 @@ ${rendered}
 \`\`\``;
 };
 
-const getRenderer = (
-  file: FileNode,
-): Renderer => {
+const getRenderer = (file: FileNode): Renderer => {
   for (const { matcher, renderer } of RENDER_RULES) {
     if (matcher(file.name)) {
       return renderer;

@@ -1,14 +1,16 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import ignore, { Ignore } from 'ignore';
 import { ScopedIgnore } from './types';
 
-export const createIgnoreFromFile = (
+export const createIgnoreFromFile = async (
   gitignorePath: string
-): Ignore | undefined => {
-  if (!fs.existsSync(gitignorePath)) {
+): Promise<Ignore | undefined> => {
+  try {
+    const content = await fs.readFile(gitignorePath, 'utf8');
+    return ignore().add(content);
+  } catch {
     return undefined;
   }
-  return ignore().add(fs.readFileSync(gitignorePath, 'utf8'));
 };
 
 export const createIgnore = (content: string): Ignore => {

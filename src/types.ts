@@ -10,6 +10,7 @@ type FileSystemNodeBase = {
 
 export type FileNode = FileSystemNodeBase & {
   type: 'file';
+  size: number;
   children?: never;
 };
 
@@ -38,4 +39,4 @@ export type Renderer = (
   rootPath: string,
   file: FileNode,
   options: RenderFilesOptions
-) => string;
+) => Promise<string>;

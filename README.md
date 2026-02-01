@@ -20,9 +20,9 @@ Create any number of view files in your project. These can be saved anywhere. Fo
     new_feature.llmview
 ```
 
-And use them selectively:
+And use one:
 
-```
+```bash
 llmview .views/backend.llmview
 ```
 
@@ -96,24 +96,30 @@ my_project/
 
 The `-n` argument includes line numbers in each file, similar to `cat -n`. This uses more tokens, but can also be useful context.
 
-## Integrating with your tools
+### Only list selected files
 
-For agentic tools, you can ask an agent to use the `llmview` command itself with views you defined. This might save it some time getting up to speed on your project, especially across sessions.
-
-For interactive use such as code reviews, you can pipe the results to an API or just copy the contents to your clipboard and paste into a LLM web app, like:
+The `-l` argument lets you use selected files for something else besides rendering the context to stdout. For example, to create a zip of selected files.
 
 ```bash
-llmview .views/backend.llmview | pbcopy
+llmview .views/backend.llmview -l | zip context.zip -@
+```
+
+### Using `llmview` as a filter
+
+Instead of reading from a view file, you can use it as a filter. For example, to render all the unstaged changes in your repo:
+
+```bash
+git diff --name-only | llmview -
 ```
 
 ## Renderers
 
-This tool comes with a set of opinionated file renderers. They are informed by the file extension. Exceptions are made for:
+This tool comes with a set of opinionated file renderers based on the file extension. Currently they are:
 
 - CSV (truncated by default, preserving the header and the first 10 lines)
 - Excel, media files, and other non-text formats (omitted)
 
-There is also a max size of 250KB per file. If a file is larger than that, it is not rendered.
+There is also a max size of 250KB per file. If a code file is larger than that, it is not rendered. (If a CSV file is larger, it's still rendered and just truncated as usual.)
 
 ## Dry run to get statistics
 

@@ -1,5 +1,4 @@
-import * as os from 'os';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 import {
@@ -9,28 +8,24 @@ import {
   FileNode,
   ScopedIgnore,
 } from './types';
-import { createIgnore, createIgnoreFromFile, isPathIgnored } from './git';
+import { createIgnore, createIgnoreFromFile, isPathIgnored } from './ignore';
 import { BASE_IGNORE_CONTENT } from './constants';
 
-const expandUser = (inputPath: string): string => {
-  return inputPath.replace(/^~/, os.homedir());
-};
-
-export const buildDirectory = (projectPath: string): RootDirectoryNode => {
-  projectPath = expandUser(projectPath);
-
+export const buildDirectory = async (
+  projectPath: string
+): Promise<RootDirectoryNode> => {
   const ignores: ScopedIgnore[] = [
     { ig: createIgnore(BASE_IGNORE_CONTENT), scope: '' },
   ];
 
-  const rootGitignore = createIgnoreFromFile(
+  const rootGitignore = await createIgnoreFromFile(
     path.join(projectPath, '.gitignore')
   );
   if (rootGitignore) {
     ignores.push({ ig: rootGitignore, scope: '' });
   }
 
-  const stat = fs.statSync(projectPath);
+  const stat = await fs.stat(projectPath);
   const rootNode: RootDirectoryNode = {
     ino: stat.ino,
     name: path.basename(projectPath),
@@ -42,22 +37,22 @@ export const buildDirectory = (projectPath: string): RootDirectoryNode => {
     children: [],
   };
 
-  rootNode.children = buildChildrenNodes(projectPath, rootNode, ignores);
+  rootNode.children = await buildChildrenNodes(projectPath, rootNode, ignores);
   return rootNode;
 };
 
-const buildChildrenNodes = (
+const buildChildrenNodes = async (
   rootPath: string,
   parentNode: DirectoryNode,
   ignores: ScopedIgnore[]
-): FileSystemNode[] => {
+): Promise<FileSystemNode[]> => {
   const currentPath = path.join(rootPath, parentNode.relativePath);
-  const entries = fs.readdirSync(currentPath);
+  const entries = await fs.readdir(currentPath);
   const nodes: FileSystemNode[] = [];
 
   for (const entry of entries) {
     const entryFullPath = path.join(currentPath, entry);
-    const lstat = fs.lstatSync(entryFullPath);
+    const lstat = await fs.lstat(entryFullPath);
     if (lstat.isSymbolicLink()) {
       continue;
     }
@@ -85,19 +80,24 @@ const buildChildrenNodes = (
         children: [],
       };
 
-      const nestedIg = createIgnoreFromFile(
+      const nestedIg = await createIgnoreFromFile(
         path.join(entryFullPath, '.gitignore')
       );
       const childIgnores = nestedIg
         ? [...ignores, { ig: nestedIg, scope: nodeRelativePath }]
         : ignores;
 
-      dirNode.children = buildChildrenNodes(rootPath, dirNode, childIgnores);
+      dirNode.children = await buildChildrenNodes(
+        rootPath,
+        dirNode,
+        childIgnores
+      );
       nodes.push(dirNode);
     } else {
       const fileNode: FileNode = {
         ...nodeBase,
         type: 'file',
+        size: lstat.size,
       };
       nodes.push(fileNode);
     }
