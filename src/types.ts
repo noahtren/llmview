@@ -1,26 +1,17 @@
 import { Ignore } from 'ignore';
 
-type FileSystemNodeBase = {
-  ino: number;
+export type FileNode = {
   name: string;
   relativePath: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type FileNode = FileSystemNodeBase & {
   type: 'file';
   size: number;
-  children?: never;
 };
 
-export type DirectoryNode = FileSystemNodeBase & {
+export type DirectoryNode = {
+  name: string;
+  relativePath: string;
   type: 'directory';
   children: FileSystemNode[];
-};
-
-export type RootDirectoryNode = DirectoryNode & {
-  rootPath: string;
 };
 
 export type FileSystemNode = FileNode | DirectoryNode;
@@ -30,13 +21,12 @@ export type ScopedIgnore = {
   scope: string;
 };
 
-export type RenderFilesOptions = {
+export type RenderFileOptions = {
   lineNumbers?: boolean;
-  verbose?: boolean;
 };
 
 export type Renderer = (
   rootPath: string,
   file: FileNode,
-  options: RenderFilesOptions
+  options: RenderFileOptions
 ) => Promise<string>;

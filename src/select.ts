@@ -1,20 +1,10 @@
 import { DirectoryNode, FileNode } from './types';
 import { minimatch } from 'minimatch';
 
-type SelectFilesOptions = {
-  verbose?: boolean;
-};
-
-type SelectFilesResult = {
-  selectedFiles: FileNode[];
-  visiblePaths: Set<string>;
-};
-
 export const selectFiles = (
   node: DirectoryNode,
-  globPatterns: string[],
-  options: SelectFilesOptions
-): SelectFilesResult => {
+  globPatterns: string[]
+): FileNode[] => {
   const allFiles = listAllFiles(node);
 
   const selectedFiles = allFiles.filter((file) => {
@@ -32,26 +22,8 @@ export const selectFiles = (
     }
     return included;
   });
-  const visiblePaths = getVisiblePaths(selectedFiles);
 
-  if (options.verbose) {
-    if (selectedFiles.length === 0) {
-      console.warn(
-        `No file(s) found that satisfy these patterns: ${globPatterns.join(
-          ', '
-        )}`
-      );
-    } else {
-      console.warn(
-        `${
-          selectedFiles.length
-        } file(s) found satisfying these patterns: ${globPatterns.join(', ')}`
-      );
-      console.warn({ visiblePaths });
-    }
-  }
-
-  return { selectedFiles, visiblePaths };
+  return selectedFiles;
 };
 
 const listAllFiles = (node: DirectoryNode): FileNode[] => {
@@ -60,19 +32,19 @@ const listAllFiles = (node: DirectoryNode): FileNode[] => {
   );
 };
 
-export const getVisiblePaths = (selectedFiles: FileNode[]): Set<string> => {
-  const visible = new Set<string>();
+export const getTreePaths = (selectedFiles: FileNode[]): Set<string> => {
+  const treePaths = new Set<string>();
 
   for (const file of selectedFiles) {
-    visible.add(file.relativePath);
+    treePaths.add(file.relativePath);
 
     const parts = file.relativePath.split('/');
     let current = '';
     for (let i = 0; i < parts.length - 1; i++) {
       current = current ? `${current}/${parts[i]}` : parts[i];
-      visible.add(current);
+      treePaths.add(current);
     }
   }
 
-  return visible;
+  return treePaths;
 };

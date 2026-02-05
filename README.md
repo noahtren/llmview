@@ -1,13 +1,15 @@
 # llmview
 
-`llmview` is a small command-line tool for producing repeatable views of code for LLMs. You can configure views for different aspects of a large project and reuse them as the code evolves.
+Generate LLM-friendly context from codebases using repeatable view files.
+
+Designed for a middle ground in AI-assisted coding. Rather than copying files manually or relying on an LLM agent to search your codebase, define views once and reuse them as your code evolves. This can often "one-shot" problems by preparing the right context.
 
 ## Quick start
 
 Install from npm
 
 ```bash
-npm install -g llmview
+npm i -g llmview
 ```
 
 Create any number of view files in your project. These can be saved anywhere. For example, a full-stack monorepo:
@@ -30,23 +32,20 @@ Run `llmview --help` for all options.
 
 ## How it works
 
-A view is a list of glob patterns to select. It's the same format as `.gitignore`, but it says which patterns to select rather than ignore.
+A view is a list of glob patterns to select files. Use `**` for recursive matching.
 
 ```gitignore
 # Code
-backend/**/**
+backend/**
 !backend/migrations/**
 
 # Docs
 docs/style_guide.md
 ```
 
-It will find all files that satisfy the glob patterns. It also respects existing `.gitignore` files (even nested ones) if your project is version controlled. If any files are ignored by git, they are also ignored here even if the view file would have selected it.
+After selecting, it outputs the contents of each file into a LLM-friendly format and prints to stdout.
 
-After selecting, it serializes the contents of each file into a LLM-friendly format and prints to stdout.
-
-````
-```
+```xml
 <file path="backend/main.py">
 from flask import Flask
 
@@ -60,9 +59,6 @@ if __name__ == "__main__":
     app.run(debug=True)
 
 </file>
-```
-
-```
 <file path="docs/style_guide.md">
 # Style guide
 
@@ -70,14 +66,12 @@ Make no mistakes
 
 </file>
 ```
-````
 
-### Including the project directory
+### Include the project directory
 
-The `-t` argument includes the file system hierarchy for all selected files at the beginning of the result.
+The `-t` argument includes the file system directory for all selected files at the beginning of the result.
 
-````
-```
+```xml
 <directory>
 my_project/
     backend/
@@ -85,16 +79,38 @@ my_project/
     docs/
         style_guide.md
 </directory>
-```
-
-```
-<file path="my_project/backend/main.py">
+<file path="backend/main.py">
 ...
-````
+```
 
-### Including line numbers
+### Include line numbers
 
 The `-n` argument includes line numbers in each file, similar to `cat -n`. This uses more tokens, but can also be useful context.
+
+### JSON output
+
+The `-j` argument outputs the result as JSON instead of XML tags. This can be useful for piping into other tools like `jq`.
+
+```bash
+llmview -j .views/backend.llmview | jq '.files[].path'
+```
+
+The JSON structure:
+
+```json
+{
+  "directory": null,
+  "files": [
+    {
+      "path": "backend/main.py",
+      "size": 245,
+      "content": "..."
+    }
+  ]
+}
+```
+
+The `directory` field is populated when using `-t`.
 
 ### Only list selected files
 
@@ -104,9 +120,9 @@ The `-l` argument lets you use selected files for something else besides renderi
 llmview .views/backend.llmview -l | zip context.zip -@
 ```
 
-### Using `llmview` as a filter
+### Using as a filter
 
-Instead of reading from a view file, you can use it as a filter. For example, to render all the unstaged changes in your repo:
+Instead of reading from a view file, you can use it as a filter by reading from stdin. For example, to render all the unstaged changes in your repo:
 
 ```bash
 git diff --name-only | llmview -
@@ -121,9 +137,9 @@ This tool comes with a set of opinionated file renderers based on the file exten
 
 There is also a max size of 250KB per file. If a code file is larger than that, it is not rendered. (If a CSV file is larger, it's still rendered and just truncated as usual.)
 
-## Dry run to get statistics
+## Verbose mode
 
-To see what files will be included and an estimate of tokens used, try a command like this:
+To see what files will be included and an estimate of tokens used, use a verbose `-v` command like this:
 
 ```bash
 llmview -v .views/backend.llmview > /dev/null

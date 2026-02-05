@@ -1,19 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-import {
-  FileSystemNode,
-  RootDirectoryNode,
-  DirectoryNode,
-  FileNode,
-  ScopedIgnore,
-} from './types';
+import { FileSystemNode, DirectoryNode, FileNode, ScopedIgnore } from './types';
 import { createIgnore, createIgnoreFromFile, isPathIgnored } from './ignore';
 import { BASE_IGNORE_CONTENT } from './constants';
 
 export const buildDirectory = async (
   projectPath: string
-): Promise<RootDirectoryNode> => {
+): Promise<DirectoryNode> => {
   const ignores: ScopedIgnore[] = [
     { ig: createIgnore(BASE_IGNORE_CONTENT), scope: '' },
   ];
@@ -25,15 +19,10 @@ export const buildDirectory = async (
     ignores.push({ ig: rootGitignore, scope: '' });
   }
 
-  const stat = await fs.stat(projectPath);
-  const rootNode: RootDirectoryNode = {
-    ino: stat.ino,
+  const rootNode: DirectoryNode = {
     name: path.basename(projectPath),
     relativePath: '',
-    createdAt: stat.birthtime,
-    updatedAt: stat.mtime,
     type: 'directory',
-    rootPath: projectPath,
     children: [],
   };
 
@@ -66,11 +55,8 @@ const buildChildrenNodes = async (
     }
 
     const nodeBase = {
-      ino: lstat.ino,
       name: entry,
       relativePath: nodeRelativePath,
-      createdAt: lstat.birthtime,
-      updatedAt: lstat.mtime,
     };
 
     if (isDirectory) {
@@ -103,6 +89,8 @@ const buildChildrenNodes = async (
     }
   }
 
+  // Sort children so directories appear before sibling files (IDE-like).
+  // This also ensures determinism for prompt caching.
   return nodes.sort((a, b) => {
     if (a.type !== b.type) {
       return a.type === 'directory' ? -1 : 1;

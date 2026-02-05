@@ -1,30 +1,18 @@
-#!/usr/bin/env node
-
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { text } from 'node:stream/consumers';
 import { buildDirectory } from './build';
 import { renderFiles, renderDirectory } from './render';
-import { selectFiles } from './select';
-import { CHARS_PER_TOKEN_ESTIMATE } from './constants';
+import { getTreePaths, selectFiles } from './select';
 
-const readStdin = (): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () =>
-      resolve(Buffer.concat(chunks).toString('utf-8'))
-    );
-    process.stdin.on('error', reject);
-  });
-};
+const readStdin = (): Promise<string> => text(process.stdin);
 
 const readPatterns = async (pathArg?: string): Promise<string[]> => {
   let content: string;
 
   if (!pathArg || pathArg === '-') {
     if (process.stdin.isTTY) {
-      console.error('Error: No input file specified and stdin is a terminal');
-      console.error('Usage: llmview <view-file> or pipe patterns via stdin');
+      console.log(HELP_TEXT);
       process.exit(1);
     }
     content = await readStdin();
@@ -47,7 +35,7 @@ const readPatterns = async (pathArg?: string): Promise<string[]> => {
     .filter((line) => line !== '' && !line.startsWith('#'));
 };
 
-const HELP_TEXT = `llmview - Generate LLM context from codebases using gitignore-style patterns
+const HELP_TEXT = `llmview - Generate LLM context from codebases
 
 Usage: llmview [options] <view-file>
 
@@ -55,6 +43,7 @@ Arguments:
   <view-file>    Path to a .llmview file, or - to read patterns from stdin
 
 Options:
+  -j, --json     Output as JSON instead of XML tags
   -l, --list     List selected files only (no content)
   -n, --number   Include line numbers in output
   -t, --tree     Include directory tree of selected files
@@ -74,6 +63,7 @@ const main = async () => {
   const includeTree = args.includes('-t') || args.includes('--tree');
   const lineNumbers = args.includes('-n') || args.includes('--number');
   const listOnly = args.includes('-l') || args.includes('--list');
+  const asJson = args.includes('-j') || args.includes('--json');
 
   const positionalArgs = args.filter((arg) => !arg.startsWith('-'));
   const patterns = await readPatterns(positionalArgs[0]);
@@ -83,30 +73,74 @@ const main = async () => {
     process.exit(1);
   }
 
-  const rootNode = await buildDirectory(process.cwd());
-  const { selectedFiles, visiblePaths } = selectFiles(rootNode, patterns, {
-    verbose,
-  });
+  const projectPath = process.cwd();
+  const rootNode = await buildDirectory(projectPath);
+  const selectedFiles = selectFiles(rootNode, patterns);
 
   if (listOnly) {
     selectedFiles.forEach((file) => console.log(file.relativePath));
     process.exit(0);
   }
 
-  let output = '';
+  let directory = null;
 
   if (includeTree) {
-    output += renderDirectory(rootNode, { verbose }, visiblePaths);
+    const treePaths = getTreePaths(selectedFiles);
+    directory = renderDirectory(rootNode, treePaths);
   }
-
-  output += await renderFiles(rootNode.rootPath, selectedFiles, {
-    verbose,
+  const renderedFiles = await renderFiles(projectPath, selectedFiles, {
     lineNumbers,
   });
+  let output = '';
+  if (asJson) {
+    const result = {
+      directory: directory,
+      files: renderedFiles.map(({ file, content }) => ({
+        path: file.relativePath,
+        size: file.size,
+        content,
+      })),
+    };
+    output = JSON.stringify(result, null, 2);
+  } else {
+    if (directory) {
+      output += `\n<directory>\n${directory}\n</directory>\n`;
+    }
+    output += renderedFiles
+      .map(
+        ({ file, content }) =>
+          `<file path="${file.relativePath}">
+${content}
+</file>`
+      )
+      .join('\n');
+    output = `\`\`\`\n${output}\n\`\`\``;
+  }
 
-  const estimatedTokens = Math.ceil(output.length / CHARS_PER_TOKEN_ESTIMATE);
   if (verbose) {
-    console.warn(`Estimated tokens: ${estimatedTokens}`);
+    const patternList = patterns.join(', ');
+
+    if (selectedFiles.length === 0) {
+      console.warn(`0 files matched (${patternList})`);
+    } else {
+      console.warn(`${selectedFiles.length} files matched (${patternList})`);
+      console.warn(`Total characters: ${output.length}`);
+      console.warn('');
+      console.warn('Files by size:');
+
+      const largestFiles = [...renderedFiles].sort(
+        (a, b) => b.content.length - a.content.length
+      );
+      const maxPathLen = Math.max(
+        ...largestFiles.map((f) => f.file.relativePath.length)
+      );
+
+      for (const { file, content } of largestFiles) {
+        const paddedPath = file.relativePath.padEnd(maxPathLen);
+        const chars = content.length.toLocaleString().padStart(8);
+        console.warn(`  ${paddedPath}  ${chars} chars`);
+      }
+    }
   }
 
   console.log(output);

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as readline from 'readline';
-import { FileNode, Renderer, RenderFilesOptions } from './types';
+import { FileNode, Renderer, RenderFileOptions } from './types';
 import { CSV_PREVIEW_LINES, MAX_FILE_SIZE_KB } from './constants';
 
 const readFirstNLines = async (
@@ -40,7 +40,7 @@ const numberLines = (lines: string[]): string => {
 export const defaultRenderer: Renderer = async (
   rootPath: string,
   file: FileNode,
-  options: RenderFilesOptions
+  options: RenderFileOptions
 ): Promise<string> => {
   const fullPath = path.join(rootPath, file.relativePath);
 
@@ -59,13 +59,18 @@ export const defaultRenderer: Renderer = async (
   return content;
 };
 
+const extMatch =
+  (...exts: string[]) =>
+  (name: string) =>
+    exts.some((ext) => name.toLowerCase().endsWith(ext));
+
 export const RENDER_RULES: Array<{
   matcher: (filename: string) => boolean;
   renderer: Renderer;
 }> = [
   // csv
   {
-    matcher: (name) => ['.csv'].some((ext) => name.toLowerCase().endsWith(ext)),
+    matcher: extMatch('.csv'),
     renderer: async (rootPath, file, options) => {
       const fullPath = path.join(rootPath, file.relativePath);
       const { lines, hasMore } = await readFirstNLines(
@@ -80,22 +85,17 @@ export const RENDER_RULES: Array<{
   },
   // excel
   {
-    matcher: (name) =>
-      ['.xls', '.xlsx'].some((ext) => name.toLowerCase().endsWith(ext)),
+    matcher: extMatch('.xls', '.xlsx'),
     renderer: async () => '(Contents excluded)',
   },
   // media
   {
-    matcher: (name) =>
-      ['.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4'].some((ext) =>
-        name.toLowerCase().endsWith(ext)
-      ),
+    matcher: extMatch('.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4'),
     renderer: async () => '(Contents excluded)',
   },
   // misc
   {
-    matcher: (name) =>
-      ['.pdf', '.zip'].some((ext) => name.toLowerCase().endsWith(ext)),
+    matcher: extMatch('.pdf', '.zip'),
     renderer: async () => '(Contents excluded)',
   },
 ];

@@ -1,33 +1,41 @@
 {
   "name": "llmview",
-  "version": "0.2.0",
-  "bin": {
-    "llmview": "dist/cli.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build",
-    "test": "node --test --experimental-strip-types test/**/*.test.ts"
-  },
+  "version": "0.3.0",
+  "description": "Generate LLM-friendly context from codebases using repeatable view files",
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Generate LLM context from codebases using gitignore-style patterns",
-  "dependencies": {
-    "ignore": "^7.0.5",
-    "minimatch": "^10.0.1"
-  },
-  "devDependencies": {
-    "prettier": "^3.8.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
-  },
-  "files": ["dist", "README.md"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/noahtren/llmview.git"
   },
   "bugs": {
     "url": "https://github.com/noahtren/llmview/issues"
+  },
+  "type": "module",
+  "bin": {
+    "llmview": "dist/cli.js"
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --minify --outfile=dist/cli.js --banner:js='#!/usr/bin/env node' --packages=external",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "minimatch": "^10.0.1",
+    "p-limit": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "esbuild": "^0.27.2",
+    "prettier": "^3.8.1",
+    "typescript": "^5.8.2",
+    "vitest": "^4.0.18"
   }
 }

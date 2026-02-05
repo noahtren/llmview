@@ -1,32 +1,21 @@
-import {
-  FileNode,
-  FileSystemNode,
-  Renderer,
-  RenderFilesOptions,
-} from './types';
+import pLimit from 'p-limit';
+import { FileNode, FileSystemNode, Renderer, RenderFileOptions } from './types';
 import { defaultRenderer, RENDER_RULES } from './render-rules';
-
-type RenderHierarchyOptions = {
-  indentChar?: string;
-  verbose?: boolean;
-};
+import { INDENT_CHAR, MAX_OPEN_FILES } from './constants';
 
 export const renderDirectory = (
   rootNode: FileSystemNode,
-  options: RenderHierarchyOptions,
-  visiblePaths?: Set<string>
+  treePaths: Set<string>
 ): string => {
-  return renderDirectoryNode(rootNode, options, visiblePaths, 0);
+  return renderDirectoryNode(rootNode, treePaths, 0);
 };
 
 const renderDirectoryNode = (
   node: FileSystemNode,
-  options: RenderHierarchyOptions,
-  visiblePaths: Set<string> | undefined,
+  treePaths: Set<string>,
   currentDepth: number
 ): string => {
-  const { indentChar = '    ' } = options;
-  const indent = indentChar.repeat(currentDepth);
+  const indent = INDENT_CHAR.repeat(currentDepth);
 
   if (node.type === 'file') {
     return `${indent}${node.name}`;
@@ -34,53 +23,44 @@ const renderDirectoryNode = (
 
   const childrenOutput = node.children
     .filter(
-      (child) =>
-        !visiblePaths ||
-        !child.relativePath ||
-        visiblePaths.has(child.relativePath)
+      (child) => child.relativePath === '' || treePaths.has(child.relativePath)
     )
-    .map((child) =>
-      renderDirectoryNode(child, options, visiblePaths, currentDepth + 1)
-    )
+    .map((child) => renderDirectoryNode(child, treePaths, currentDepth + 1))
     .join('\n');
 
   const result = `${indent}${node.name}/`;
-
-  if (currentDepth === 0) {
-    return `\`\`\`\n<directory>\n${result}\n${childrenOutput}\n</directory>\n\`\`\`\n\n`;
-  }
 
   return childrenOutput ? `${result}\n${childrenOutput}` : result;
 };
 
 export const renderFiles = async (
-  rootPath: string,
+  projectPath: string,
   files: FileNode[],
-  options: RenderFilesOptions
-): Promise<string> => {
-  const renderedBlocks = await Promise.all(
-    files.map((file) => renderFile(rootPath, file, options))
+  options: RenderFileOptions
+): Promise<Array<{ file: FileNode; content: string }>> => {
+  const limit = pLimit(MAX_OPEN_FILES);
+
+  const renderedFiles = await Promise.all(
+    files.map((file) =>
+      limit(async () => {
+        const content = await renderFile(projectPath, file, options);
+        return { file, content };
+      })
+    )
   );
-  return renderedBlocks.join('\n\n');
+
+  return renderedFiles;
 };
 
 const renderFile = async (
-  rootPath: string,
+  projectPath: string,
   file: FileNode,
-  options: RenderFilesOptions
+  options: RenderFileOptions
 ): Promise<string> => {
   const renderer = getRenderer(file);
-  const rendered = await renderer(rootPath, file, options);
+  const rendered = await renderer(projectPath, file, options);
 
-  if (options.verbose) {
-    console.warn({ path: file.relativePath, length: rendered.length });
-  }
-
-  return `\`\`\`
-<file path="${file.relativePath}">
-${rendered}
-</file>
-\`\`\``;
+  return rendered;
 };
 
 const getRenderer = (file: FileNode): Renderer => {
