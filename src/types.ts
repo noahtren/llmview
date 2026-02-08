@@ -30,3 +30,5 @@ export type Renderer = (
   file: FileNode,
   options: RenderFileOptions
 ) => Promise<string>;
+
+export type FormatOption = 'xml' | 'json' | 'markdown';

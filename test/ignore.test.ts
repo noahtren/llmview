@@ -16,7 +16,6 @@ describe('isPathIgnored', () => {
 
   it('appends slash for directory checks', () => {
     const ignores: ScopedIgnore[] = [{ ig: createIgnore('build/'), scope: '' }];
-    // Pattern "build/" only matches directories
     expect(isPathIgnored('build', true, ignores)).toBe(true);
     expect(isPathIgnored('build', false, ignores)).toBe(false);
   });
@@ -25,9 +24,7 @@ describe('isPathIgnored', () => {
     const ignores: ScopedIgnore[] = [
       { ig: createIgnore('*.log'), scope: 'packages/app' },
     ];
-    // Should match within scope
     expect(isPathIgnored('packages/app/debug.log', false, ignores)).toBe(true);
-    // Should not match outside scope
     expect(isPathIgnored('debug.log', false, ignores)).toBe(false);
     expect(isPathIgnored('other/debug.log', false, ignores)).toBe(false);
   });
@@ -46,9 +43,7 @@ describe('isPathIgnored', () => {
       { ig: createIgnore('dist/'), scope: '' },
       { ig: createIgnore('!dist/'), scope: 'packages/special' },
     ];
-    // Root-level dist still ignored
     expect(isPathIgnored('dist', true, ignores)).toBe(true);
-    // But packages/special/dist is allowed
     expect(isPathIgnored('packages/special/dist', true, ignores)).toBe(false);
   });
 });

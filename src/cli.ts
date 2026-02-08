@@ -1,9 +1,14 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { parseArgs } from 'node:util';
 import { text } from 'node:stream/consumers';
-import { buildDirectory } from './build';
+import { scanDirectory } from './scan';
 import { renderFiles, renderDirectory } from './render';
 import { getTreePaths, selectFiles } from './select';
+import { formatOutput } from './format';
+import { FormatOption } from './types';
+
+declare const __VERSION__: string;
 
 const readStdin = (): Promise<string> => text(process.stdin);
 
@@ -31,11 +36,11 @@ const readPatterns = async (pathArg?: string): Promise<string[]> => {
 
   return content
     .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'));
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter((line) => line !== '');
 };
 
-const HELP_TEXT = `llmview - Generate LLM context from codebases
+const HELP_TEXT = `llmview - Reusable views of code for LLM context
 
 Usage: llmview [options] <view-file>
 
@@ -43,30 +48,49 @@ Arguments:
   <view-file>    Path to a .llmview file, or - to read patterns from stdin
 
 Options:
-  -j, --json     Output as JSON instead of XML tags
-  -l, --list     List selected files only (no content)
-  -n, --number   Include line numbers in output
-  -t, --tree     Include directory tree of selected files
-  -v, --verbose  Print file statistics to stderr
-  -h, --help     Show this help message
+  -j, --json        Output as JSON instead of XML tags
+  -m, --markdown    Output as markdown instead of XML tags
+  -l, --list        List selected files only (no content)
+  -n, --number      Include line numbers in output
+  -t, --tree        Include directory tree of selected files
+  -v, --verbose     Print file statistics to stderr
+  -h, --help        Show this help message
+  -V, --version     Show version number
 `;
 
 const main = async () => {
-  const args = process.argv.slice(2);
+  const { values, positionals } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      json: { type: 'boolean', short: 'j', default: false },
+      markdown: { type: 'boolean', short: 'm', default: false },
+      list: { type: 'boolean', short: 'l', default: false },
+      number: { type: 'boolean', short: 'n', default: false },
+      tree: { type: 'boolean', short: 't', default: false },
+      verbose: { type: 'boolean', short: 'v', default: false },
+      help: { type: 'boolean', short: 'h', default: false },
+      version: { type: 'boolean', short: 'V', default: false },
+    },
+    allowPositionals: true,
+  });
 
-  if (args.includes('-h') || args.includes('--help')) {
+  const formatFlags = [values.json, values.markdown].filter(Boolean);
+  if (formatFlags.length > 1) {
+    console.error('Only one format flag can be used (--json, --markdown)');
+    process.exit(1);
+  }
+
+  if (values.help) {
     console.log(HELP_TEXT);
     process.exit(0);
   }
 
-  const verbose = args.includes('-v') || args.includes('--verbose');
-  const includeTree = args.includes('-t') || args.includes('--tree');
-  const lineNumbers = args.includes('-n') || args.includes('--number');
-  const listOnly = args.includes('-l') || args.includes('--list');
-  const asJson = args.includes('-j') || args.includes('--json');
+  if (values.version) {
+    console.log(__VERSION__);
+    process.exit(0);
+  }
 
-  const positionalArgs = args.filter((arg) => !arg.startsWith('-'));
-  const patterns = await readPatterns(positionalArgs[0]);
+  const patterns = await readPatterns(positionals[0]);
 
   if (patterns.length === 0) {
     console.error('No patterns found in input');
@@ -74,50 +98,33 @@ const main = async () => {
   }
 
   const projectPath = process.cwd();
-  const rootNode = await buildDirectory(projectPath);
+  const rootNode = await scanDirectory(projectPath);
   const selectedFiles = selectFiles(rootNode, patterns);
 
-  if (listOnly) {
+  if (values.list) {
     selectedFiles.forEach((file) => console.log(file.relativePath));
     process.exit(0);
   }
 
   let directory = null;
 
-  if (includeTree) {
+  if (values.tree) {
     const treePaths = getTreePaths(selectedFiles);
     directory = renderDirectory(rootNode, treePaths);
   }
   const renderedFiles = await renderFiles(projectPath, selectedFiles, {
-    lineNumbers,
+    lineNumbers: values.number,
   });
-  let output = '';
-  if (asJson) {
-    const result = {
-      directory: directory,
-      files: renderedFiles.map(({ file, content }) => ({
-        path: file.relativePath,
-        size: file.size,
-        content,
-      })),
-    };
-    output = JSON.stringify(result, null, 2);
-  } else {
-    if (directory) {
-      output += `\n<directory>\n${directory}\n</directory>\n`;
-    }
-    output += renderedFiles
-      .map(
-        ({ file, content }) =>
-          `<file path="${file.relativePath}">
-${content}
-</file>`
-      )
-      .join('\n');
-    output = `\`\`\`\n${output}\n\`\`\``;
-  }
 
-  if (verbose) {
+  const format: FormatOption = values.markdown
+    ? 'markdown'
+    : values.json
+      ? 'json'
+      : 'xml';
+
+  const output = formatOutput(renderedFiles, directory, format);
+
+  if (values.verbose) {
     const patternList = patterns.join(', ');
 
     if (selectedFiles.length === 0) {

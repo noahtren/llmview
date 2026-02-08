@@ -1,5 +1,5 @@
 import { DirectoryNode, FileNode } from './types';
-import { minimatch } from 'minimatch';
+import { Minimatch } from 'minimatch';
 
 export const selectFiles = (
   node: DirectoryNode,
@@ -7,23 +7,21 @@ export const selectFiles = (
 ): FileNode[] => {
   const allFiles = listAllFiles(node);
 
-  const selectedFiles = allFiles.filter((file) => {
+  const compiled = globPatterns.map((pattern) => {
+    const isNegation = pattern.startsWith('!');
+    const raw = isNegation ? pattern.slice(1) : pattern;
+    return { isNegation, mm: new Minimatch(raw, { dot: true }) };
+  });
+
+  return allFiles.filter((file) => {
     let included = false;
-    for (const pattern of globPatterns) {
-      if (pattern.startsWith('!')) {
-        if (minimatch(file.relativePath, pattern.slice(1), { dot: true })) {
-          included = false;
-        }
-      } else {
-        if (minimatch(file.relativePath, pattern, { dot: true })) {
-          included = true;
-        }
+    for (const { isNegation, mm } of compiled) {
+      if (mm.match(file.relativePath)) {
+        included = !isNegation;
       }
     }
     return included;
   });
-
-  return selectedFiles;
 };
 
 const listAllFiles = (node: DirectoryNode): FileNode[] => {

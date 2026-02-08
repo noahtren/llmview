@@ -1,7 +1,7 @@
 {
   "name": "llmview",
-  "version": "0.3.0",
-  "description": "Generate LLM-friendly context from codebases using repeatable view files",
+  "version": "0.4.0",
+  "description": "Reusable views of code for LLM context",
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -16,12 +16,12 @@
   "bin": {
     "llmview": "dist/cli.js"
   },
-  "files": ["dist", "README.md"],
+  "files": ["dist", "README.md", "LICENSE"],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --minify --outfile=dist/cli.js --banner:js='#!/usr/bin/env node' --packages=external",
+    "build": "tsx build.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
@@ -35,6 +35,7 @@
     "@types/node": "^25.2.0",
     "esbuild": "^0.27.2",
     "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.2",
     "vitest": "^4.0.18"
   }

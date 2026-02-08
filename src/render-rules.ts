@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { createReadStream } from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -10,7 +10,7 @@ const readFirstNLines = async (
   n: number
 ): Promise<{ lines: string[]; hasMore: boolean }> => {
   const lines: string[] = [];
-  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+  const stream = createReadStream(filePath, { encoding: 'utf-8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   try {
@@ -64,11 +64,12 @@ const extMatch =
   (name: string) =>
     exts.some((ext) => name.toLowerCase().endsWith(ext));
 
+// Render rules are checked in order.
+// Specialized renderers will catch files first, falling back to the default renderer.
 export const RENDER_RULES: Array<{
   matcher: (filename: string) => boolean;
   renderer: Renderer;
 }> = [
-  // csv
   {
     matcher: extMatch('.csv'),
     renderer: async (rootPath, file, options) => {
@@ -83,17 +84,14 @@ export const RENDER_RULES: Array<{
       return hasMore ? `${preview}\n... (more rows)` : preview;
     },
   },
-  // excel
   {
     matcher: extMatch('.xls', '.xlsx'),
     renderer: async () => '(Contents excluded)',
   },
-  // media
   {
     matcher: extMatch('.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4'),
     renderer: async () => '(Contents excluded)',
   },
-  // misc
   {
     matcher: extMatch('.pdf', '.zip'),
     renderer: async () => '(Contents excluded)',

@@ -1,23 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { selectFiles, getTreePaths } from '../src/select';
-import { DirectoryNode, FileNode } from '../src/types';
-
-const file = (relativePath: string): FileNode => ({
-  name: relativePath.split('/').pop()!,
-  relativePath,
-  type: 'file',
-  size: 0,
-});
-
-const dir = (
-  relativePath: string,
-  children: (FileNode | DirectoryNode)[]
-): DirectoryNode => ({
-  name: relativePath.split('/').pop() || 'root',
-  relativePath,
-  type: 'directory',
-  children,
-});
+import { file, dir } from './fixture';
 
 describe('selectFiles', () => {
   const tree = dir('', [

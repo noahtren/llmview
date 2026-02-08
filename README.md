@@ -1,6 +1,6 @@
 # llmview
 
-Generate LLM-friendly context from codebases using repeatable view files.
+Reusable views of code for LLM context.
 
 Designed for a middle ground in AI-assisted coding. Rather than copying files manually or relying on an LLM agent to search your codebase, define views once and reuse them as your code evolves. This can often "one-shot" problems by preparing the right context.
 
@@ -32,7 +32,7 @@ Run `llmview --help` for all options.
 
 ## How it works
 
-A view is a list of glob patterns to select files. Use `**` for recursive matching.
+A view is a list of glob patterns to select files. Use `**` for recursive matching and `!` for negation.
 
 ```gitignore
 # Code
@@ -43,7 +43,7 @@ backend/**
 docs/style_guide.md
 ```
 
-After selecting, it outputs the contents of each file into a LLM-friendly format and prints to stdout.
+The patterns are used to find files. The contents of each file are printed to stdout in XML tag format.
 
 ```xml
 <file path="backend/main.py">
@@ -85,21 +85,32 @@ my_project/
 
 ### Include line numbers
 
-The `-n` argument includes line numbers in each file, similar to `cat -n`. This uses more tokens, but can also be useful context.
+The `-n` argument includes line numbers in each file, similar to `cat -n`.
 
-### JSON output
+### Markdown format
 
-The `-j` argument outputs the result as JSON instead of XML tags. This can be useful for piping into other tools like `jq`.
+The `-m` argument outputs the result as markdown with syntax-highlighted code blocks:
+
+````
+`src/main.py`
+```py
+from flask import Flask
+...
+```
+````
+
+### JSON format
+
+The `-j` argument outputs the result as JSON instead of XML tags. This can be useful for piping into other tools like `jq`:
 
 ```bash
-llmview -j .views/backend.llmview | jq '.files[].path'
+llmview -j .views/backend.llmview | jq '.files | length'
 ```
 
-The JSON structure:
+This is the JSON structure:
 
 ```json
 {
-  "directory": null,
   "files": [
     {
       "path": "backend/main.py",
@@ -110,11 +121,17 @@ The JSON structure:
 }
 ```
 
-The `directory` field is populated when using `-t`.
+A `directory` field is populated when using `-t`.
+
+You can generate a custom render format using `jq`, like:
+
+```bash
+llmview -j .views/backend.llmview | jq -r '.files[] | "**\(.path)**\n---\n\(.content)\n"'
+```
 
 ### Only list selected files
 
-The `-l` argument lets you use selected files for something else besides rendering the context to stdout. For example, to create a zip of selected files.
+The `-l` argument lists the selected files instead of rendering them. For example, to create a zip of selected files:
 
 ```bash
 llmview .views/backend.llmview -l | zip context.zip -@
@@ -130,19 +147,19 @@ git diff --name-only | llmview -
 
 ## Renderers
 
-This tool comes with a set of opinionated file renderers based on the file extension. Currently they are:
+There are some opinionated file renderers which are based on the file extension. Currently they are:
 
 - CSV (truncated by default, preserving the header and the first 10 lines)
 - Excel, media files, and other non-text formats (omitted)
 
-There is also a max size of 250KB per file. If a code file is larger than that, it is not rendered. (If a CSV file is larger, it's still rendered and just truncated as usual.)
+If a file-specific renderer is not found, the default renderer is used. It assumes files are UTF-8 encoded and skips any files larger than 250KB.
 
 ## Verbose mode
 
-To see what files will be included and an estimate of tokens used, use a verbose `-v` command like this:
+To see what files will be included and a count of total output characters, use the verbose flag `-v`:
 
 ```bash
 llmview -v .views/backend.llmview > /dev/null
 ```
 
-This works because verbose information gets printed to stderr, and stdout goes to `/dev/null`.
+Verbose information gets printed to stderr, and stdout goes to `/dev/null`.
