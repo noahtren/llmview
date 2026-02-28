@@ -1,8 +1,9 @@
-import { createReadStream } from 'fs';
-import * as fsPromises from 'fs/promises';
-import * as path from 'path';
-import * as readline from 'readline';
-import { FileNode, Renderer, RenderFileOptions } from './types';
+import { createReadStream } from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
+import * as path from 'node:path';
+import * as readline from 'node:readline';
+
+import { FileNode, RenderFileOptions, RenderRule } from './types';
 import { CSV_PREVIEW_LINES, MAX_FILE_SIZE_KB } from './constants';
 
 const readFirstNLines = async (
@@ -37,12 +38,12 @@ const numberLines = (lines: string[]): string => {
     .join('\n');
 };
 
-export const defaultRenderer: Renderer = async (
-  rootPath: string,
+export const defaultRule = async (
+  projectPath: string,
   file: FileNode,
   options: RenderFileOptions
 ): Promise<string> => {
-  const fullPath = path.join(rootPath, file.relativePath);
+  const fullPath = path.join(projectPath, file.relativePath);
 
   if (file.size > MAX_FILE_SIZE_KB * 1024) {
     return `(File contents excluded: size ${(file.size / 1024).toFixed(
@@ -59,41 +60,34 @@ export const defaultRenderer: Renderer = async (
   return content;
 };
 
-const extMatch =
-  (...exts: string[]) =>
-  (name: string) =>
-    exts.some((ext) => name.toLowerCase().endsWith(ext));
-
 // Render rules are checked in order.
 // Specialized renderers will catch files first, falling back to the default renderer.
-export const RENDER_RULES: Array<{
-  matcher: (filename: string) => boolean;
-  renderer: Renderer;
-}> = [
-  {
-    matcher: extMatch('.csv'),
-    renderer: async (rootPath, file, options) => {
-      const fullPath = path.join(rootPath, file.relativePath);
-      const { lines, hasMore } = await readFirstNLines(
-        fullPath,
-        CSV_PREVIEW_LINES
-      );
-      const preview = options.lineNumbers
-        ? numberLines(lines)
-        : lines.join('\n');
-      return hasMore ? `${preview}\n... (more rows)` : preview;
-    },
+export const RENDER_RULES: RenderRule[] = [
+  // Binary guard
+  async (projectPath, file) => {
+    const fullPath = path.join(projectPath, file.relativePath);
+    const fd = await fsPromises.open(fullPath, 'r');
+    try {
+      const buf = Buffer.alloc(8192);
+      const { bytesRead } = await fd.read(buf, 0, 8192, 0);
+      if (bytesRead > 0 && buf.subarray(0, bytesRead).includes(0)) {
+        return '(Contents excluded: binary file)';
+      }
+    } finally {
+      await fd.close();
+    }
+    return null;
   },
-  {
-    matcher: extMatch('.xls', '.xlsx'),
-    renderer: async () => '(Contents excluded)',
-  },
-  {
-    matcher: extMatch('.ico', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4'),
-    renderer: async () => '(Contents excluded)',
-  },
-  {
-    matcher: extMatch('.pdf', '.zip'),
-    renderer: async () => '(Contents excluded)',
+
+  // CSV preview
+  async (projectPath, file, options) => {
+    if (!file.relativePath.toLowerCase().endsWith('.csv')) return null;
+    const fullPath = path.join(projectPath, file.relativePath);
+    const { lines, hasMore } = await readFirstNLines(
+      fullPath,
+      CSV_PREVIEW_LINES
+    );
+    const preview = options.lineNumbers ? numberLines(lines) : lines.join('\n');
+    return hasMore ? `${preview}\n... (more rows)` : preview;
   },
 ];

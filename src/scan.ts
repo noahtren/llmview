@@ -1,7 +1,7 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import pLimit, { LimitFunction } from 'p-limit';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
+import pLimit, { LimitFunction } from 'p-limit';
 import { FileSystemNode, DirectoryNode, ScopedIgnore } from './types';
 import { createIgnore, createIgnoreFromFile, isPathIgnored } from './ignore';
 import { BASE_IGNORE_CONTENT, MAX_OPEN_FILES } from './constants';
@@ -15,15 +15,7 @@ export const scanDirectory = async (
     { ig: createIgnore(BASE_IGNORE_CONTENT), scope: '' },
   ];
 
-  const rootGitignore = await createIgnoreFromFile(
-    path.join(projectPath, '.gitignore')
-  );
-  if (rootGitignore) {
-    ignores.push({ ig: rootGitignore, scope: '' });
-  }
-
   const rootNode: DirectoryNode = {
-    name: path.basename(projectPath),
     relativePath: '',
     type: 'directory',
     children: [],
@@ -39,13 +31,22 @@ export const scanDirectory = async (
 };
 
 const scanChildrenNodes = async (
-  rootPath: string,
+  projectPath: string,
   parentNode: DirectoryNode,
   ignores: ScopedIgnore[],
   ioLimit: LimitFunction
 ): Promise<FileSystemNode[]> => {
-  const currentPath = path.join(rootPath, parentNode.relativePath);
+  const currentPath = path.join(projectPath, parentNode.relativePath);
   const entries = await ioLimit(() => fs.readdir(currentPath));
+
+  if (entries.includes('.gitignore')) {
+    const ig = await ioLimit(() =>
+      createIgnoreFromFile(path.join(currentPath, '.gitignore'))
+    );
+    if (ig) {
+      ignores = [...ignores, { ig, scope: parentNode.relativePath }];
+    }
+  }
 
   const results = await Promise.all(
     entries.map(async (entry): Promise<FileSystemNode | null> => {
@@ -66,36 +67,31 @@ const scanChildrenNodes = async (
 
         if (isDirectory) {
           const dirNode: DirectoryNode = {
-            name: entry,
             relativePath: nodeRelativePath,
             type: 'directory',
             children: [],
           };
 
-          const nestedIg = await ioLimit(() =>
-            createIgnoreFromFile(path.join(entryFullPath, '.gitignore'))
-          );
-          const childIgnores = nestedIg
-            ? [...ignores, { ig: nestedIg, scope: nodeRelativePath }]
-            : ignores;
-
           dirNode.children = await scanChildrenNodes(
-            rootPath,
+            projectPath,
             dirNode,
-            childIgnores,
+            ignores,
             ioLimit
           );
           return dirNode;
         } else {
           return {
-            name: entry,
             relativePath: nodeRelativePath,
             type: 'file',
             size: lstat.size,
           };
         }
-      } catch {
-        return null;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'EACCES' || code === 'EPERM') {
+          return null;
+        }
+        throw err;
       }
     })
   );
@@ -108,6 +104,8 @@ const scanChildrenNodes = async (
     if (a.type !== b.type) {
       return a.type === 'directory' ? -1 : 1;
     }
-    return a.name.localeCompare(b.name);
+    return path
+      .basename(a.relativePath)
+      .localeCompare(path.basename(b.relativePath));
   });
 };

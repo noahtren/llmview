@@ -1,4 +1,5 @@
-import * as fs from 'fs/promises';
+import * as fs from 'node:fs/promises';
+
 import ignore, { Ignore } from 'ignore';
 import { ScopedIgnore } from './types';
 

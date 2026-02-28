@@ -1,6 +1,7 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as os from 'node:os';
+
 import { DirectoryNode, FileNode, FileSystemNode } from '../src/types';
 
 // ── node builders ────────────────────────────────────────────────────
@@ -9,7 +10,6 @@ const fileContents = new WeakMap<FileNode, string>();
 
 export const file = (relativePath: string, content: string = ''): FileNode => {
   const node: FileNode = {
-    name: relativePath.split('/').pop()!,
     relativePath,
     type: 'file',
     size: Buffer.byteLength(content),
@@ -22,7 +22,6 @@ export const dir = (
   relativePath: string,
   children: FileSystemNode[] = []
 ): DirectoryNode => ({
-  name: relativePath.split('/').pop() || 'root',
   relativePath,
   type: 'directory',
   children,

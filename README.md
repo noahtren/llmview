@@ -28,11 +28,9 @@ And use one:
 llmview .views/backend.llmview
 ```
 
-Run `llmview --help` for all options.
-
 ## How it works
 
-A view is a list of glob patterns to select files. Use `**` for recursive matching and `!` for negation.
+A view is a list of glob patterns to select files. Use `**` for recursive matching and `!` for negation. It automatically respects your project's `.gitignore` files.
 
 ```gitignore
 # Code
@@ -43,7 +41,7 @@ backend/**
 docs/style_guide.md
 ```
 
-The patterns are used to find files. The contents of each file are printed to stdout in XML tag format.
+Each matched file is printed to stdout in XML format.
 
 ```xml
 <file path="backend/main.py">
@@ -57,19 +55,28 @@ def hello():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
 </file>
 <file path="docs/style_guide.md">
 # Style guide
 
 Make no mistakes
-
 </file>
 ```
 
+## File handling
+
+Files are handled differently based on their contents or extension:
+
+- Binary files are excluded since their contents are not readable
+- CSVs are truncated, preserving the header and the first 10 lines
+
+Files without a specific renderer fall back to the default source code renderer. It assumes files are UTF-8 encoded and skips any files larger than 250KB.
+
+## Rendering options
+
 ### Include the project directory
 
-The `-t` argument includes the file system directory for all selected files at the beginning of the result.
+The `-t` argument includes a tree of matched files.
 
 ```xml
 <directory>
@@ -83,25 +90,31 @@ my_project/
 ...
 ```
 
-### Include line numbers
+### Use line numbers
 
 The `-n` argument includes line numbers in each file, similar to `cat -n`.
 
-### Markdown format
+## Formats
+
+### XML
+
+This is the default format.
+
+### Markdown
 
 The `-m` argument outputs the result as markdown with syntax-highlighted code blocks:
 
 ````
-`src/main.py`
+`backend/main.py`
 ```py
 from flask import Flask
 ...
 ```
 ````
 
-### JSON format
+### JSON
 
-The `-j` argument outputs the result as JSON instead of XML tags. This can be useful for piping into other tools like `jq`:
+The `-j` argument outputs the result as JSON. This can be useful for piping into other tools like `jq`:
 
 ```bash
 llmview -j .views/backend.llmview | jq '.files | length'
@@ -114,8 +127,8 @@ This is the JSON structure:
   "files": [
     {
       "path": "backend/main.py",
-      "size": 245,
-      "content": "..."
+      "size": 155,
+      "content": "from flask import Flask\n..."
     }
   ]
 }
@@ -123,11 +136,7 @@ This is the JSON structure:
 
 A `directory` field is populated when using `-t`.
 
-You can generate a custom render format using `jq`, like:
-
-```bash
-llmview -j .views/backend.llmview | jq -r '.files[] | "**\(.path)**\n---\n\(.content)\n"'
-```
+## Other uses
 
 ### Only list selected files
 
@@ -139,22 +148,13 @@ llmview .views/backend.llmview -l | zip context.zip -@
 
 ### Using as a filter
 
-Instead of reading from a view file, you can use it as a filter by reading from stdin. For example, to render all the unstaged changes in your repo:
+Use `-` to read from stdin instead of a file. For example, to render all the unstaged changes in your repo:
 
 ```bash
 git diff --name-only | llmview -
 ```
 
-## Renderers
-
-There are some opinionated file renderers which are based on the file extension. Currently they are:
-
-- CSV (truncated by default, preserving the header and the first 10 lines)
-- Excel, media files, and other non-text formats (omitted)
-
-If a file-specific renderer is not found, the default renderer is used. It assumes files are UTF-8 encoded and skips any files larger than 250KB.
-
-## Verbose mode
+### Verbose mode
 
 To see what files will be included and a count of total output characters, use the verbose flag `-v`:
 
@@ -163,3 +163,11 @@ llmview -v .views/backend.llmview > /dev/null
 ```
 
 Verbose information gets printed to stderr, and stdout goes to `/dev/null`.
+
+### Custom format by parsing JSON
+
+You can generate a custom render format from the JSON format using `jq`:
+
+```bash
+llmview -j .views/backend.llmview | jq -r '.files[] | "**\(.path)**\n---\n\(.content)\n"'
+```

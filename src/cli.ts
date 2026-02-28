@@ -1,44 +1,15 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { text } from 'node:stream/consumers';
+
 import { scanDirectory } from './scan';
-import { renderFiles, renderDirectory } from './render';
+import { renderFiles, renderTree } from './render';
 import { getTreePaths, selectFiles } from './select';
 import { formatOutput } from './format';
 import { FormatOption } from './types';
 
 declare const __VERSION__: string;
-
-const readStdin = (): Promise<string> => text(process.stdin);
-
-const readPatterns = async (pathArg?: string): Promise<string[]> => {
-  let content: string;
-
-  if (!pathArg || pathArg === '-') {
-    if (process.stdin.isTTY) {
-      console.log(HELP_TEXT);
-      process.exit(1);
-    }
-    content = await readStdin();
-  } else {
-    const resolvedPath = path.resolve(pathArg);
-    try {
-      content = await fs.readFile(resolvedPath, 'utf-8');
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        console.error(`File not found: ${resolvedPath}`);
-        process.exit(1);
-      }
-      throw err;
-    }
-  }
-
-  return content
-    .split('\n')
-    .map((line) => line.replace(/#.*$/, '').trim())
-    .filter((line) => line !== '');
-};
 
 const HELP_TEXT = `llmview - Reusable views of code for LLM context
 
@@ -57,6 +28,34 @@ Options:
   -h, --help        Show this help message
   -V, --version     Show version number
 `;
+
+const readPatterns = async (pathArg?: string): Promise<string[]> => {
+  let content: string;
+
+  if (!pathArg || pathArg === '-') {
+    if (process.stdin.isTTY) {
+      console.log(HELP_TEXT);
+      process.exit(1);
+    }
+    content = await text(process.stdin);
+  } else {
+    const resolvedPath = path.resolve(pathArg);
+    try {
+      content = await fs.readFile(resolvedPath, 'utf-8');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.error(`File not found: ${resolvedPath}`);
+        process.exit(1);
+      }
+      throw err;
+    }
+  }
+
+  return content
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter((line) => line !== '');
+};
 
 const main = async () => {
   const { values, positionals } = parseArgs({
@@ -110,7 +109,7 @@ const main = async () => {
 
   if (values.tree) {
     const treePaths = getTreePaths(selectedFiles);
-    directory = renderDirectory(rootNode, treePaths);
+    directory = renderTree(rootNode, treePaths, path.basename(projectPath));
   }
   const renderedFiles = await renderFiles(projectPath, selectedFiles, {
     lineNumbers: values.number,

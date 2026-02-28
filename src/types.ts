@@ -1,14 +1,12 @@
 import { Ignore } from 'ignore';
 
 export type FileNode = {
-  name: string;
   relativePath: string;
   type: 'file';
   size: number;
 };
 
 export type DirectoryNode = {
-  name: string;
   relativePath: string;
   type: 'directory';
   children: FileSystemNode[];
@@ -25,10 +23,10 @@ export type RenderFileOptions = {
   lineNumbers?: boolean;
 };
 
-export type Renderer = (
-  rootPath: string,
+export type RenderRule = (
+  projectPath: string,
   file: FileNode,
   options: RenderFileOptions
-) => Promise<string>;
+) => Promise<string | null>;
 
 export type FormatOption = 'xml' | 'json' | 'markdown';

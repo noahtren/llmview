@@ -1,34 +1,31 @@
+import * as path from 'node:path';
+
 import pLimit from 'p-limit';
-import { FileNode, FileSystemNode, Renderer, RenderFileOptions } from './types';
-import { defaultRenderer, RENDER_RULES } from './render-rules';
+import { FileNode, FileSystemNode, RenderFileOptions } from './types';
+import { defaultRule, RENDER_RULES } from './render-rules';
 import { INDENT_CHAR, MAX_OPEN_FILES } from './constants';
 
-export const renderDirectory = (
-  rootNode: FileSystemNode,
-  treePaths: Set<string>
-): string => {
-  return renderDirectoryNode(rootNode, treePaths, 0);
-};
-
-const renderDirectoryNode = (
+export const renderTree = (
   node: FileSystemNode,
   treePaths: Set<string>,
-  currentDepth: number
+  rootName: string,
+  currentDepth: number = 0
 ): string => {
   const indent = INDENT_CHAR.repeat(currentDepth);
+  const name = node.relativePath ? path.basename(node.relativePath) : rootName;
 
   if (node.type === 'file') {
-    return `${indent}${node.name}`;
+    return `${indent}${name}`;
   }
 
   const childrenOutput = node.children
     .filter(
       (child) => child.relativePath === '' || treePaths.has(child.relativePath)
     )
-    .map((child) => renderDirectoryNode(child, treePaths, currentDepth + 1))
+    .map((child) => renderTree(child, treePaths, rootName, currentDepth + 1))
     .join('\n');
 
-  const result = `${indent}${node.name}/`;
+  const result = `${indent}${name}/`;
 
   return childrenOutput ? `${result}\n${childrenOutput}` : result;
 };
@@ -57,18 +54,9 @@ const renderFile = async (
   file: FileNode,
   options: RenderFileOptions
 ): Promise<string> => {
-  const renderer = getRenderer(file);
-  const rendered = await renderer(projectPath, file, options);
-
-  return rendered;
-};
-
-const getRenderer = (file: FileNode): Renderer => {
-  for (const { matcher, renderer } of RENDER_RULES) {
-    if (matcher(file.name)) {
-      return renderer;
-    }
+  for (const rule of RENDER_RULES) {
+    const result = await rule(projectPath, file, options);
+    if (result !== null) return result;
   }
-
-  return defaultRenderer;
+  return defaultRule(projectPath, file, options);
 };

@@ -1,9 +1,10 @@
-import path from 'node:path';
+import * as path from 'node:path';
+
 import { FileNode, FormatOption } from './types';
 import { LANG_MAP } from './constants';
 
-const getLang = (filename: string): string => {
-  const ext = path.extname(filename).toLowerCase();
+const getLang = (filePath: string): string => {
+  const ext = path.extname(filePath).toLowerCase();
   return LANG_MAP[ext] ?? ext.slice(1);
 };
 
@@ -45,7 +46,7 @@ const formatters: Record<FormatOption, Formatter> = {
       parts.push(`\`\`\`\n${directory}\n\`\`\``);
     }
     for (const { file, content } of renderedFiles) {
-      const lang = getLang(file.name);
+      const lang = getLang(file.relativePath);
       parts.push(`\`${file.relativePath}\`\n\`\`\`${lang}\n${content}\n\`\`\``);
     }
     return parts.join('\n\n');

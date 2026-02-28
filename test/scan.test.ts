@@ -1,6 +1,7 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { describe, it, expect, afterEach } from 'vitest';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { scanDirectory } from '../src/scan';
 import { FileNode, DirectoryNode } from '../src/types';
 import {
@@ -51,7 +52,9 @@ describe('buildDirectory', () => {
     );
 
     const root = await scanDirectory(projectPath);
-    const topLevelNames = root.children.map((c) => c.name);
+    const topLevelNames = root.children.map((c) =>
+      path.basename(c.relativePath)
+    );
 
     expect(topLevelNames).toEqual([
       'alpha',

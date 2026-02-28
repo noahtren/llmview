@@ -1,5 +1,5 @@
+import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
-import { readFileSync } from 'fs';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf-8'));
 
