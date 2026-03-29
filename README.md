@@ -44,7 +44,7 @@ This is my Python backend project.
 
 ## The file that generated this context
 
-<llmview globs={['view.mdx']} />
+<llmview globs={['context.mdx']} />
 ```
 
 Then render it:
@@ -57,7 +57,7 @@ The output is a single document with your prose, file contents, and command outp
 
 ## Doc format
 
-A `.mdx` file mixes markdown prose with `<llmview>` and `<llmview-exec>` tags. Prose passes through unchanged, while each tag is replaced with rendered output. This tool uses the MDX format to leverage JSX-like components and props, but it uses a text-only renderer that supports these two tags, rather than making React components.
+A `.mdx` file mixes markdown prose with `<llmview>` and `<llmview-exec>` tags. Prose passes through unchanged, while each tag is replaced with rendered output. llmview uses the MDX format to leverage JSX-like component and prop syntax, but it uses a text-only renderer that supports these two tags, rather than React components.
 
 ### `<llmview>` tag — include files
 
@@ -175,7 +175,7 @@ from flask import Flask
 **JSON** (`-f json`) is useful for piping into other tools:
 
 ```bash
-llmview -f json .views/backend.llmview | jq '.files | length'
+llmview -f json context.llmview | jq '.files | length'
 ```
 
 ### Reading from stdin
@@ -199,5 +199,5 @@ llmview -v context.mdx > /dev/null
 Use `-l` to list selected files without rendering. For example, to zip them:
 
 ```bash
-llmview .views/backend.llmview -l | zip context.zip -@
+llmview context.llmview -l | zip context.zip -@
 ```
