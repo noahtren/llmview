@@ -1,0 +1,26 @@
+{/* llmview -v .views/context.mdx | pbcopy */}
+
+## Project tree
+
+<llmview treeOnly globs={['**']} />
+
+## Root files
+
+<llmview globs={['*', '!package-lock.json']} />
+
+## Source code
+
+<llmview globs={['src/**']} />
+
+## Skills
+
+<llmview frontmatterOnly globs={['skills/*/SKILL.md']} />
+
+## Recent changes
+
+<llmview-exec cmd="git log --oneline -10" />
+<llmview-exec cmd="git diff main" />
+
+## The file that generated this context
+
+<llmview globs={['.views/context.mdx']} />

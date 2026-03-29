@@ -4,7 +4,10 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 
 import { FileNode, RenderFileOptions, RenderRule } from './types';
+import { parseFrontmatter } from './frontmatter';
 import { CSV_PREVIEW_LINES, MAX_FILE_SIZE_KB } from './constants';
+
+const FRONTMATTER_EXTENSIONS = new Set(['.md', '.mdx', '.markdown']);
 
 const readFirstNLines = async (
   filePath: string,
@@ -89,5 +92,41 @@ export const RENDER_RULES: RenderRule[] = [
     );
     const preview = options.lineNumbers ? numberLines(lines) : lines.join('\n');
     return hasMore ? `${preview}\n... (more rows)` : preview;
+  },
+
+  // Markdown frontmatter
+  async (projectPath, file, options) => {
+    const ext = path.extname(file.relativePath).toLowerCase();
+    if (!FRONTMATTER_EXTENSIONS.has(ext)) {
+      return null;
+    }
+
+    const fullPath = path.join(projectPath, file.relativePath);
+
+    if (file.size > MAX_FILE_SIZE_KB * 1024) {
+      return `(File contents excluded: size ${(file.size / 1024).toFixed(
+        2
+      )}KB exceeds ${MAX_FILE_SIZE_KB}KB limit)`;
+    }
+
+    const raw = await fsPromises.readFile(fullPath, 'utf-8');
+    const parsed = parseFrontmatter(raw);
+
+    // No frontmatter found — pass through to the default renderer
+    // unless frontmatterOnly is set (in which case return empty)
+    if (!parsed.frontmatter) {
+      if (options.frontmatterOnly) {
+        return { content: '' };
+      }
+      return null;
+    }
+
+    let content = options.frontmatterOnly ? '' : parsed.body;
+
+    if (content && options.lineNumbers) {
+      content = numberLines(content.split('\n'));
+    }
+
+    return { content, frontmatter: parsed.frontmatter };
   },
 ];

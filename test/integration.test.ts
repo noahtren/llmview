@@ -5,10 +5,11 @@ import { scanDirectory } from '../src/scan';
 import { selectFiles, getTreePaths } from '../src/select';
 import { renderFiles, renderTree } from '../src/render';
 import { formatOutput } from '../src/format';
+import { execute } from '../src/execute';
 import { toDiskTmp, cleanupDisk } from './fixture';
-import { projectTree, patterns } from './readme-example';
+import { projectTree, patterns } from './flask-app-example';
 
-describe('integration: README flask example', () => {
+describe('integration: Flask example', () => {
   afterEach(cleanupDisk);
 
   it('selects the right files (excludes migrations)', async () => {
@@ -27,7 +28,7 @@ describe('integration: README flask example', () => {
     const root = await scanDirectory(projectPath);
     const selected = selectFiles(root, patterns);
     const rendered = await renderFiles(projectPath, selected, {});
-    const output = formatOutput(rendered, null, 'xml');
+    const { output } = formatOutput(rendered, null, 'xml');
 
     expect(output).toContain('<file path="backend/main.py">');
     expect(output).toContain('from flask import Flask');
@@ -43,7 +44,7 @@ describe('integration: README flask example', () => {
     const treePaths = getTreePaths(selected);
     const tree = renderTree(root, treePaths, path.basename(projectPath));
     const rendered = await renderFiles(projectPath, selected, {});
-    const output = formatOutput(rendered, tree, 'xml');
+    const { output } = formatOutput(rendered, tree, 'xml');
 
     expect(output).toMatch(/^<directory>/);
     expect(output).toContain('backend/');
@@ -58,7 +59,7 @@ describe('integration: README flask example', () => {
     const root = await scanDirectory(projectPath);
     const selected = selectFiles(root, patterns);
     const rendered = await renderFiles(projectPath, selected, {});
-    const output = formatOutput(rendered, null, 'markdown');
+    const { output } = formatOutput(rendered, null, 'markdown');
 
     expect(output).toContain('`backend/main.py`');
     expect(output).toContain('```py');
@@ -71,7 +72,7 @@ describe('integration: README flask example', () => {
     const root = await scanDirectory(projectPath);
     const selected = selectFiles(root, patterns);
     const rendered = await renderFiles(projectPath, selected, {});
-    const output = formatOutput(rendered, null, 'json');
+    const { output } = formatOutput(rendered, null, 'json');
     const parsed = JSON.parse(output);
 
     expect(parsed.files).toHaveLength(2);
@@ -79,5 +80,31 @@ describe('integration: README flask example', () => {
       'backend/main.py',
       'docs/style_guide.md',
     ]);
+  });
+
+  it('renders tree only with treeOnly option', async () => {
+    const projectPath = await toDiskTmp(projectTree);
+    const { output, renderedFiles } = await execute(projectPath, {
+      globs: patterns,
+      treeOnly: true,
+      tree: true,
+    });
+
+    expect(renderedFiles).toBeNull();
+    expect(output).toContain('<directory>');
+    expect(output).toContain('backend/');
+    expect(output).toContain('main.py');
+    expect(output).toContain('docs/');
+    expect(output).not.toContain('<file');
+    expect(output).not.toContain('from flask');
+  });
+
+  it('renders files only by default (no tree)', async () => {
+    const projectPath = await toDiskTmp(projectTree);
+    const { output } = await execute(projectPath, { globs: patterns });
+
+    expect(output).not.toContain('<directory>');
+    expect(output).toContain('<file path="backend/main.py">');
+    expect(output).toContain('from flask import Flask');
   });
 });

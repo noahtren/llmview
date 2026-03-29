@@ -1,6 +1,12 @@
 import * as path from 'node:path';
 
-import { FileNode, FormatOption } from './types';
+import {
+  FileCharCount,
+  FormatOption,
+  FormatResult,
+  RenderedFile,
+} from './types';
+import { Frontmatter } from './frontmatter';
 import { LANG_MAP } from './constants';
 
 const getLang = (filePath: string): string => {
@@ -8,53 +14,108 @@ const getLang = (filePath: string): string => {
   return LANG_MAP[ext] ?? ext.slice(1);
 };
 
+const renderXmlFrontmatter = (fm: Frontmatter): string => {
+  const lines = Object.entries(fm).map(
+    ([key, value]) => `  <${key}>${String(value ?? '')}</${key}>`
+  );
+  return `<frontmatter>\n${lines.join('\n')}\n</frontmatter>`;
+};
+
+const renderMarkdownFrontmatter = (fm: Frontmatter): string => {
+  return Object.entries(fm)
+    .map(([key, value]) => `${key}: ${String(value ?? '')}`)
+    .join('\n');
+};
+
 type Formatter = (
-  renderedFiles: Array<{ file: FileNode; content: string }>,
+  renderedFiles: RenderedFile[] | null,
   directory: string | null
-) => string;
+) => FormatResult;
 
 const formatters: Record<FormatOption, Formatter> = {
   xml: (renderedFiles, directory) => {
     const sections: string[] = [];
+    const fileChars: FileCharCount[] = [];
+
     if (directory) {
       sections.push(`<directory>\n${directory}\n</directory>`);
     }
-    for (const { file, content } of renderedFiles) {
-      sections.push(`<file path="${file.relativePath}">\n${content}\n</file>`);
+    if (renderedFiles) {
+      for (const { file, content, frontmatter } of renderedFiles) {
+        const parts: string[] = [];
+        if (frontmatter) parts.push(renderXmlFrontmatter(frontmatter));
+        if (content) parts.push(content);
+        const inner = parts.join('\n');
+        const section = inner
+          ? `<file path="${file.relativePath}">\n${inner}\n</file>`
+          : `<file path="${file.relativePath}" />`;
+        fileChars.push({ path: file.relativePath, chars: section.length });
+        sections.push(section);
+      }
     }
-    return sections.join('\n');
+    return {
+      output: sections.join('\n'),
+      fileChars: fileChars.length > 0 ? fileChars : null,
+    };
   },
 
   json: (renderedFiles, directory) => {
-    return JSON.stringify(
+    const fileEntries = renderedFiles?.map(
+      ({ file, content, frontmatter }) => ({
+        path: file.relativePath,
+        ...(frontmatter != null && { frontmatter }),
+        ...(content && { content }),
+      })
+    );
+
+    const output = JSON.stringify(
       {
         ...(directory != null && { directory }),
-        files: renderedFiles.map(({ file, content }) => ({
-          path: file.relativePath,
-          size: file.size,
-          content,
-        })),
+        ...(fileEntries != null && { files: fileEntries }),
       },
       null,
       2
     );
+
+    // Per-file: stringify each entry individually for an approximate breakdown
+    const fileChars =
+      fileEntries?.map((entry) => ({
+        path: entry.path,
+        chars: JSON.stringify(entry, null, 2).length,
+      })) ?? null;
+
+    return { output, fileChars };
   },
 
   markdown: (renderedFiles, directory) => {
     const parts: string[] = [];
+    const fileChars: FileCharCount[] = [];
+
     if (directory) {
       parts.push(`\`\`\`\n${directory}\n\`\`\``);
     }
-    for (const { file, content } of renderedFiles) {
-      const lang = getLang(file.relativePath);
-      parts.push(`\`${file.relativePath}\`\n\`\`\`${lang}\n${content}\n\`\`\``);
+    if (renderedFiles) {
+      for (const { file, content, frontmatter } of renderedFiles) {
+        const fileParts: string[] = [`\`${file.relativePath}\``];
+        if (frontmatter) fileParts.push(renderMarkdownFrontmatter(frontmatter));
+        if (content) {
+          const lang = getLang(file.relativePath);
+          fileParts.push(`\`\`\`${lang}\n${content}\n\`\`\``);
+        }
+        const section = fileParts.join('\n');
+        fileChars.push({ path: file.relativePath, chars: section.length });
+        parts.push(section);
+      }
     }
-    return parts.join('\n\n');
+    return {
+      output: parts.join('\n\n'),
+      fileChars: fileChars.length > 0 ? fileChars : null,
+    };
   },
 };
 
 export const formatOutput = (
-  renderedFiles: Array<{ file: FileNode; content: string }>,
+  renderedFiles: RenderedFile[] | null,
   directory: string | null,
   format: FormatOption
-): string => formatters[format](renderedFiles, directory);
+): FormatResult => formatters[format](renderedFiles, directory);

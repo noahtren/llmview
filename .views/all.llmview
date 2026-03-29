@@ -1,4 +1,4 @@
-# llmview -v -t -n .views/all.llmview | pbcopy
+# llmview -v -t -n -f markdown .views/all.llmview | pbcopy
 
 **
 !package-lock.json

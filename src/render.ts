@@ -1,7 +1,13 @@
 import * as path from 'node:path';
 
 import pLimit from 'p-limit';
-import { FileNode, FileSystemNode, RenderFileOptions } from './types';
+import {
+  FileNode,
+  FileSystemNode,
+  RenderFileOptions,
+  RenderResult,
+  RenderedFile,
+} from './types';
 import { defaultRule, RENDER_RULES } from './render-rules';
 import { INDENT_CHAR, MAX_OPEN_FILES } from './constants';
 
@@ -34,26 +40,29 @@ export const renderFiles = async (
   projectPath: string,
   files: FileNode[],
   options: RenderFileOptions
-): Promise<Array<{ file: FileNode; content: string }>> => {
+): Promise<RenderedFile[]> => {
   const limit = pLimit(MAX_OPEN_FILES);
 
-  const renderedFiles = await Promise.all(
+  return Promise.all(
     files.map((file) =>
       limit(async () => {
-        const content = await renderFile(projectPath, file, options);
-        return { file, content };
+        const result = await renderFile(projectPath, file, options);
+
+        if (typeof result === 'string') {
+          return { file, content: result };
+        }
+
+        return { file, ...result };
       })
     )
   );
-
-  return renderedFiles;
 };
 
 const renderFile = async (
   projectPath: string,
   file: FileNode,
   options: RenderFileOptions
-): Promise<string> => {
+): Promise<RenderResult | string> => {
   for (const rule of RENDER_RULES) {
     const result = await rule(projectPath, file, options);
     if (result !== null) return result;

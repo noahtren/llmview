@@ -1,6 +1,6 @@
 {
   "name": "llmview",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Reusable views of code for LLM context",
   "keywords": [],
   "author": "",
@@ -18,19 +18,19 @@
   },
   "files": ["dist", "README.md", "LICENSE"],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.12"
   },
   "scripts": {
     "build": "tsx build.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build",
-    "readme-example": "tsx scripts/readme-example.ts"
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "ignore": "^7.0.5",
     "minimatch": "^10.0.1",
-    "p-limit": "^7.2.0"
+    "p-limit": "^7.2.0",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
